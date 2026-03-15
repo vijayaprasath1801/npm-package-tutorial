@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NPM Package Publishing – KT Session</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0f1e; font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; height: 100vh; width: 100vw; }
+
+  #player {
+    width: 100vw; height: 100vh;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── Slide Container ── */
+  #slide-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 48px 60px;
+    opacity: 0;
+    transform: translateX(60px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    pointer-events: none;
+  }
+  .slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: all;
+  }
+  .slide.exit {
+    opacity: 0;
+    transform: translateX(-60px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  /* ── Slide Themes ── */
+  .theme-dark { background: linear-gradient(135deg, #0d1f3c 0%, #0f172a 100%); }
+  .theme-light { background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%); }
+  .theme-green { background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%); }
+  .theme-purple { background: linear-gradient(135deg, #2d1b69 0%, #0f172a 100%); }
+
+  /* ── Typography ── */
+  .badge {
+    display: inline-block;
+    background: #2563eb;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+  }
+  .slide-title { font-size: 42px; font-weight: 800; line-height: 1.1; margin-bottom: 10px; }
+  .slide-subtitle { font-size: 18px; margin-bottom: 32px; opacity: 0.75; }
+  .text-white { color: #fff; }
+  .text-dark { color: #0f172a; }
+  .text-cyan { color: #06b6d4; }
+  .text-blue { color: #2563eb; }
+  .text-green { color: #10b981; }
+  .text-orange { color: #f59e0b; }
+  .text-red { color: #ef4444; }
+  .text-gray { color: #94a3b8; }
+  .text-accent { color: #38bdf8; }
+
+  /* ── Layout ── */
+  .row { display: flex; gap: 20px; flex: 1; }
+  .col { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+
+  /* ── Cards ── */
+  .card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 20px 22px;
+  }
+  .card-light {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px 22px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+  }
+  .card-header {
+    font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* ── Step Cards ── */
+  .step-card {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 18px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    margin-bottom: 12px;
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .step-card.visible { opacity: 1; transform: translateY(0); }
+  .step-num {
+    width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px; color: #fff;
+    flex-shrink: 0;
+  }
+  .step-cmd {
+    background: #1e293b;
+    color: #4ade80;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .step-desc { font-size: 13px; color: #475569; margin-top: 4px; }
+
+  /* ── Code Block ── */
+  .code-block {
+    background: #0d1926;
+    border: 1px solid #1e3a5f;
+    border-radius: 10px;
+    padding: 18px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    overflow: hidden;
+  }
+  .code-block .line { opacity: 0; transform: translateX(10px); transition: opacity 0.3s ease, transform 0.3s ease; }
+  .code-block .line.visible { opacity: 1; transform: translateX(0); }
+  .cm { color: #64748b; }
+  .ck { color: #f59e0b; }
+  .cs { color: #4ade80; }
+  .cv { color: #38bdf8; }
+  .cn { color: #e2e8f0; }
+
+  /* ── Warning Box ── */
+  .warn-box {
+    background: #fef3c7; border: 1px solid #f59e0b;
+    border-radius: 10px; padding: 14px 18px;
+    font-size: 13px; color: #92400e;
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  /* ── Info Chip ── */
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(37,99,235,0.15);
+    border: 1px solid rgba(37,99,235,0.3);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 13px; color: #60a5fa;
+    margin: 4px;
+  }
+
+  /* ── NPM Logo ── */
+  .npm-logo {
+    background: #cc0000;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-weight: 900;
+    border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* ── Comparison Panels ── */
+  .compare-panel {
+    flex: 1;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .compare-title {
+    font-size: 15px; font-weight: 800; margin-bottom: 6px;
+  }
+  .compare-item {
+    background: rgba(0,0,0,0.25);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  .compare-code {
+    background: rgba(0,0,0,0.4);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #4ade80;
+    margin-top: 4px;
+  }
+
+  /* ── Progress Bar ── */
+  #controls {
+    height: 68px;
+    background: #0d1f3c;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 24px;
+  }
+  #progress-track {
+    flex: 1; height: 4px; background: rgba(255,255,255,0.12);
+    border-radius: 2px; cursor: pointer; position: relative;
+  }
+  #progress-fill {
+    height: 100%; background: linear-gradient(90deg, #2563eb, #06b6d4);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+  #slide-dots { display: flex; gap: 6px; margin: 0 8px; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.2); cursor: pointer;
+    transition: background 0.3s, transform 0.3s;
+  }
+  .dot.active { background: #38bdf8; transform: scale(1.3); }
+
+  .ctrl-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(255,255,255,0.08); border: none;
+    color: #fff; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .ctrl-btn:hover { background: rgba(255,255,255,0.18); }
+  .ctrl-btn:disabled { opacity: 0.3; cursor: default; }
+
+  #play-btn {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: #2563eb; border: none; color: #fff;
+    font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s, transform 0.1s;
+    box-shadow: 0 0 20px rgba(37,99,235,0.4);
+  }
+  #play-btn:hover { background: #1d4ed8; transform: scale(1.05); }
+
+  #slide-counter { color: #94a3b8; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  #slide-label { color: #38bdf8; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; flex: 0 0 auto; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Animations ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.6; }
+  }
+  @keyframes typing {
+    from { width: 0; } to { width: 100%; }
+  }
+  .anim-fadeup { animation: fadeUp 0.5s ease forwards; }
+  .anim-d1 { animation-delay: 0.1s; opacity: 0; }
+  .anim-d2 { animation-delay: 0.3s; opacity: 0; }
+  .anim-d3 { animation-delay: 0.5s; opacity: 0; }
+  .anim-d4 { animation-delay: 0.7s; opacity: 0; }
+  .anim-d5 { animation-delay: 0.9s; opacity: 0; }
+
+  /* ── Grid Cards ── */
+  .bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; }
+  .bp-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    display: flex; gap: 12px;
+    opacity: 0; transform: scale(0.95);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .bp-card.visible { opacity: 1; transform: scale(1); }
+  .bp-icon { font-size: 24px; flex-shrink: 0; }
+  .bp-title { font-size: 13px; font-weight: 700; color: #1e3a5f; margin-bottom: 4px; }
+  .bp-desc { font-size: 11px; color: #64748b; }
+
+  /* ── Flow Diagram ── */
+  .flow { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; margin-top: 16px; }
+  .flow-node {
+    background: #1e3a5f; border: 2px solid #2563eb;
+    border-radius: 8px; padding: 10px 14px;
+    text-align: center; flex-shrink: 0;
+    opacity: 0; transform: scale(0.8);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .flow-node.visible { opacity: 1; transform: scale(1); }
+  .flow-arrow {
+    color: #38bdf8; font-size: 20px;
+    opacity: 0; transition: opacity 0.4s ease;
+    flex-shrink: 0; padding: 0 4px;
+  }
+  .flow-arrow.visible { opacity: 1; }
+  .flow-node-title { font-size: 11px; font-weight: 700; color: #38bdf8; }
+  .flow-node-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+
+</style>
+</head>
+<body>
+<div id="player">
+  <div id="slide-area">
+
+    <!-- SLIDE 0: Title -->
+    <div class="slide theme-dark active" id="s0">
+      <div style="display:flex; flex:1; gap:40px; align-items:center;">
+        <div style="flex:1;">
+          <div class="badge">Knowledge Transfer Session</div>
+          <div class="slide-title text-white anim-fadeup anim-d1">Publishing<br>NPM Packages</div>
+          <div class="slide-title text-cyan anim-fadeup anim-d2" style="font-size:26px; margin-top:0;">Public & Private Registries</div>
+          <p class="text-gray anim-fadeup anim-d3" style="font-size:15px; margin-top:16px;">A complete step-by-step guide for developers</p>
+          <div style="margin-top:28px;" class="anim-fadeup anim-d4">
+            <span class="chip">📦 npm publish</span>
+            <span class="chip">🔒 Private Registry</span>
+            <span class="chip">⚙️ CI/CD</span>
+            <span class="chip">🔖 SemVer</span>
+          </div>
+        </div>
+        <div style="flex:0 0 260px; display:flex; flex-direction:column; align-items:center; gap:16px;" class="anim-fadeup anim-d3">
+          <div class="npm-logo" style="font-size:72px; width:200px; height:120px;">npm</div>
+          <div style="font-size:13px; color:#64748b; text-align:center;">World's largest<br>JavaScript registry</div>
+          <div style="font-size:22px; font-weight:800; color:#38bdf8;">2M+ Packages</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 1: What is NPM -->
+    <div class="slide theme-dark" id="s1">
+      <div class="badge" style="background:#06b6d4;">01 — What is NPM?</div>
+      <div class="slide-title text-white" style="font-size:32px;">Understanding the Registry</div>
+      <div class="row" style="margin-top:20px;">
+        <div class="col">
+          <div class="card anim-fadeup anim-d1">
+            <div style="font-size:32px; margin-bottom:8px;">📦</div>
+            <div class="card-header text-cyan">Node Package Manager</div>
+            <p style="font-size:13px; color:#94a3b8;">The default package manager for Node.js. Manages dependencies, scripts, and packages in the JavaScript ecosystem.</p>
+          </div>
+          <div class="card anim-fadeup anim-d2">
+            <div style="font-size:32px; margin-bottom:8px;">🌐</div>
+            <div class="card-header text-green">Public Registry</div>
+            <p style="font-size:13px; color:#94a3b8;"><strong style="color:#4ade80;">registry.npmjs.org</strong><br>Free, open to everyone. 2M+ packages. No auth needed to install.</p>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card anim-fadeup anim-d3">
+            <div style="font-size:32px; margin-bottom:8px;">🔒</div>
+            <div class="card-header text-orange">Private Registry</div>
+            <p style="font-size:13px; color:#94a3b8;">GitHub Packages, Verdaccio, AWS CodeArtifact. Requires authentication. Used for internal/proprietary code.</p>
+          </div>
+          <div class="card anim-fadeup anim-d4">
+            <div style="font-size:32px; margin-bottom:8px;">⚙️</div>
+            <div class="card-header text-accent">CLI Tool</div>
+            <p style="font-size:13px; color:#94a3b8;">The <span style="font-family:monospace;color:#4ade80;">npm</span> command-line tool: install, publish, update, audit packages from your terminal.</p>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card anim-fadeup anim-d5" style="background:rgba(37,99,235,0.15); border-color:rgba(37,99,235,0.3);">
+            <div class="card-header text-accent">npm vs npx vs yarn</div>
+            <p style="font-size:12px; color:#94a3b8; margin-bottom:8px;"><strong style="color:#38bdf8;">npm</strong> — installs & publishes packages</p>
+            <p style="font-size:12px; color:#94a3b8; margin-bottom:8px;"><strong style="color:#38bdf8;">npx</strong> — runs packages without installing</p>
+            <p style="font-size:12px; color:#94a3b8;"><strong style="color:#38bdf8;">yarn/pnpm</strong> — alternative package managers (different lock files)</p>
+          </div>
+          <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:14px; margin-top:4px;">
+            <p style="font-size:12px; color:#86efac;">💡 <strong>Key Insight:</strong><br><span style="font-family:monospace; color:#4ade80;">npm publish</span> pushes your code to the registry so others can <span style="font-family:monospace; color:#4ade80;">npm install</span> it.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: Project Setup -->
+    <div class="slide theme-dark" id="s2">
+      <div class="badge" style="background:#f59e0b; color:#0f172a;">02 — Project Setup</div>
+      <div class="slide-title text-white" style="font-size:32px;">package.json — Your Package Identity</div>
+      <div class="row" style="margin-top:16px;">
+        <div style="flex:1.2;">
+          <div class="code-block" id="code-setup">
+            <div class="line" id="cl0"><span class="cn">{</span></div>
+            <div class="line" id="cl1">&nbsp;&nbsp;<span class="ck">"name"</span><span class="cn">: </span><span class="cs">"@yourscope/my-lib"</span><span class="cn">,</span></div>
+            <div class="line" id="cl2">&nbsp;&nbsp;<span class="ck">"version"</span><span class="cn">: </span><span class="cs">"1.0.0"</span><span class="cn">,</span></div>
+            <div class="line" id="cl3">&nbsp;&nbsp;<span class="ck">"description"</span><span class="cn">: </span><span class="cs">"My awesome library"</span><span class="cn">,</span></div>
+            <div class="line" id="cl4">&nbsp;&nbsp;<span class="ck">"main"</span><span class="cn">: </span><span class="cs">"dist/index.js"</span><span class="cn">,</span></div>
+            <div class="line" id="cl5">&nbsp;&nbsp;<span class="ck">"files"</span><span class="cn">: [</span><span class="cs">"dist/"</span><span class="cn">, </span><span class="cs">"README.md"</span><span class="cn">],</span></div>
+            <div class="line" id="cl6">&nbsp;&nbsp;<span class="ck">"publishConfig"</span><span class="cn">: {</span></div>
+            <div class="line" id="cl7">&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">"access"</span><span class="cn">: </span><span class="cs">"public"</span></div>
+            <div class="line" id="cl8">&nbsp;&nbsp;<span class="cn">}</span></div>
+            <div class="line" id="cl9"><span class="cn">}</span></div>
+          </div>
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:10px;">
+          <div class="card anim-fadeup anim-d1" style="padding:14px;">
+            <span style="font-family:monospace; color:#f59e0b; font-size:14px; font-weight:700;">name</span>
+            <p style="font-size:12px; color:#94a3b8; margin-top:4px;">Use @scope/pkg-name for scoped packages. Must be globally unique on npm.</p>
+          </div>
+          <div class="card anim-fadeup anim-d2" style="padding:14px;">
+            <span style="font-family:monospace; color:#f59e0b; font-size:14px; font-weight:700;">version</span>
+            <p style="font-size:12px; color:#94a3b8; margin-top:4px;">SemVer: <span style="color:#4ade80;">MAJOR.MINOR.PATCH</span>. Never republish the same version!</p>
+          </div>
+          <div class="card anim-fadeup anim-d3" style="padding:14px;">
+            <span style="font-family:monospace; color:#f59e0b; font-size:14px; font-weight:700;">files</span>
+            <p style="font-size:12px; color:#94a3b8; margin-top:4px;">Whitelist what gets published. Exclude tests, src, .env — keeps tarball small.</p>
+          </div>
+          <div class="card anim-fadeup anim-d4" style="padding:14px;">
+            <span style="font-family:monospace; color:#f59e0b; font-size:14px; font-weight:700;">publishConfig.access</span>
+            <p style="font-size:12px; color:#94a3b8; margin-top:4px;">Required for scoped (@scope) packages to be public. Otherwise defaults to private!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: Publishing Public -->
+    <div class="slide theme-light" id="s3">
+      <div class="badge" style="background:#10b981;">03 — Public Registry</div>
+      <div class="slide-title text-dark" style="font-size:30px;">Publishing to npm Public Registry</div>
+      <div id="pub-steps" style="margin-top:16px; flex:1;">
+        <div class="step-card" id="ps0">
+          <div class="step-num" style="background:#2563eb;">1</div>
+          <div style="flex:1;">
+            <div class="step-cmd">npm login</div>
+            <div class="step-desc">Authenticate with your npm account. Prompts for username, password, OTP.</div>
+          </div>
+        </div>
+        <div class="step-card" id="ps1">
+          <div class="step-num" style="background:#0891b2;">2</div>
+          <div style="flex:1;">
+            <div class="step-cmd">npm pack --dry-run</div>
+            <div class="step-desc">Preview exactly which files will be published. Verify no secrets are included!</div>
+          </div>
+        </div>
+        <div class="step-card" id="ps2">
+          <div class="step-num" style="background:#10b981;">3</div>
+          <div style="flex:1;">
+            <div class="step-cmd">npm publish</div>
+            <div class="step-desc">Publish to the public registry. First publish creates the package on npmjs.com.</div>
+          </div>
+        </div>
+        <div class="step-card" id="ps3">
+          <div class="step-num" style="background:#f59e0b;">4</div>
+          <div style="flex:1;">
+            <div class="step-cmd">npm publish --access public</div>
+            <div class="step-desc">Required for scoped packages (@scope/name). Without this, it defaults to private (paid)!</div>
+          </div>
+        </div>
+        <div class="step-card" id="ps4">
+          <div class="step-num" style="background:#7c3aed;">5</div>
+          <div style="flex:1;">
+            <div class="step-cmd">npm version patch && npm publish</div>
+            <div class="step-desc">Always bump version before re-publishing. patch=bug fix, minor=feature, major=breaking.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: Private Registry -->
+    <div class="slide theme-purple" id="s4">
+      <div class="badge" style="background:#38bdf8; color:#0f172a;">04 — Private Registry</div>
+      <div class="slide-title text-white" style="font-size:30px;">Private Package Publishing</div>
+      <div class="row" style="margin-top:16px;">
+        <div class="compare-panel anim-fadeup anim-d1" style="background:rgba(6,182,212,0.1); border:2px solid rgba(6,182,212,0.3);">
+          <div class="compare-title text-accent">🐙 GitHub Packages</div>
+          <div class="compare-item" style="color:#e2e8f0; font-size:12px;">
+            <strong>1.</strong> Name: <span style="color:#4ade80;">@your-github-org/my-lib</span>
+          </div>
+          <div class="compare-item" style="color:#e2e8f0; font-size:12px;">
+            <strong>2.</strong> Create PAT with <span style="color:#4ade80;">write:packages</span> scope
+          </div>
+          <div class="compare-item" style="color:#e2e8f0; font-size:12px;">
+            <strong>3.</strong> Configure .npmrc:
+            <div class="compare-code">@myorg:registry=https://npm.pkg.github.com<br>//npm.pkg.github.com/:_authToken=TOKEN</div>
+          </div>
+          <div class="compare-item" style="color:#e2e8f0; font-size:12px;">
+            <strong>4.</strong> Publish:
+            <div class="compare-code">npm publish</div>
+          </div>
+          <div style="margin-top:6px; font-size:11px; color:#38bdf8;">✅ Best for GitHub-centric teams</div>
+        </div>
+        <div class="compare-panel anim-fadeup anim-d2" style="background:rgba(245,158,11,0.1); border:2px solid rgba(245,158,11,0.3);">
+          <div class="compare-title text-orange">🏠 Verdaccio (Self-Hosted)</div>
+          <div class="compare-item" style="color:#e2e8f0; font-size:12px;">
+            <strong>1.</strong> Install & start:
+            <div class="compare-code">npx verdaccio<br># Starts at localhost:4873</div>
+          </div>
+          <div class="compare-item" style="color:#e2e8f0; font-size:12px;">
+            <strong>2.</strong> Configure .npmrc:
+            <div class="compare-code">registry=http://localhost:4873/</div>
+          </div>
+          <div class="compare-item" style="color:#e2e8f0; font-size:12px;">
+            <strong>3.</strong> Add user:
+            <div class="compare-code">npm adduser --registry http://localhost:4873/</div>
+          </div>
+          <div class="compare-item" style="color:#e2e8f0; font-size:12px;">
+            <strong>4.</strong> Publish:
+            <div class="compare-code">npm publish --registry http://localhost:4873/</div>
+          </div>
+          <div style="margin-top:6px; font-size:11px; color:#f59e0b;">✅ Full control, offline-capable</div>
+        </div>
+        <div class="col" style="flex:0.8;">
+          <div class="card anim-fadeup anim-d3" style="background:rgba(255,255,255,0.05);">
+            <div class="card-header text-accent">Other Options</div>
+            <p style="font-size:12px; color:#94a3b8; margin-bottom:8px;">☁️ <strong style="color:#e2e8f0;">AWS CodeArtifact</strong> — AWS-native, integrates with IAM</p>
+            <p style="font-size:12px; color:#94a3b8; margin-bottom:8px;">🦊 <strong style="color:#e2e8f0;">GitLab Registry</strong> — Built into GitLab pipelines</p>
+            <p style="font-size:12px; color:#94a3b8;">💎 <strong style="color:#e2e8f0;">npm Orgs (paid)</strong> — Private scoped on npmjs.com</p>
+          </div>
+          <div class="warn-box anim-fadeup anim-d4">
+            <span style="font-size:20px;">⚠️</span>
+            <span>Always use <strong>scoped package names</strong> (@org/name) for private packages to avoid registry conflicts.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: Authentication -->
+    <div class="slide theme-dark" id="s5">
+      <div class="badge" style="background:#ef4444;">05 — Authentication</div>
+      <div class="slide-title text-white" style="font-size:30px;">.npmrc & Token Management</div>
+      <div class="row" style="margin-top:16px;">
+        <div style="flex:1.3;">
+          <div class="code-block">
+            <div style="color:#64748b; font-size:11px; margin-bottom:8px; border-bottom:1px solid #1e3a5f; padding-bottom:6px;">~/.npmrc — User-level configuration</div>
+            <div class="line visible"><span class="cm"># Default registry</span></div>
+            <div class="line visible"><span class="cv">registry</span><span class="cn">=https://registry.npmjs.org/</span></div>
+            <div class="line visible"><span class="cn">&nbsp;</span></div>
+            <div class="line visible"><span class="cm"># Scoped → GitHub Packages</span></div>
+            <div class="line visible"><span class="cv">@myorg:registry</span><span class="cn">=https://npm.pkg.github.com</span></div>
+            <div class="line visible"><span class="cv">//npm.pkg.github.com/:_authToken</span><span class="cn">=${GITHUB_TOKEN}</span></div>
+            <div class="line visible"><span class="cn">&nbsp;</span></div>
+            <div class="line visible"><span class="cm"># Scoped → Private Verdaccio</span></div>
+            <div class="line visible"><span class="cv">@internal:registry</span><span class="cn">=http://localhost:4873/</span></div>
+            <div class="line visible"><span class="cv">//localhost:4873/:_authToken</span><span class="cn">=${LOCAL_TOKEN}</span></div>
+          </div>
+          <div class="warn-box anim-fadeup anim-d3" style="margin-top:14px;">
+            <span style="font-size:20px;">🚨</span>
+            <div><strong>NEVER commit tokens to Git!</strong> Use environment variables or CI/CD secrets. Add <code>.npmrc</code> to <code>.gitignore</code> if it contains tokens.</div>
+          </div>
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:10px;">
+          <div style="font-size:14px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">Token Types</div>
+          <div class="card anim-fadeup anim-d1" style="border-left:3px solid #10b981; padding:12px 16px;">
+            <div style="font-size:13px; font-weight:700; color:#4ade80;">Read-Only Token</div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">For CI to install private packages. Minimal permissions.</div>
+          </div>
+          <div class="card anim-fadeup anim-d2" style="border-left:3px solid #f59e0b; padding:12px 16px;">
+            <div style="font-size:13px; font-weight:700; color:#fbbf24;">Publish Token</div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">For npm publish in workflows. Requires write:packages.</div>
+          </div>
+          <div class="card anim-fadeup anim-d3" style="border-left:3px solid #2563eb; padding:12px 16px;">
+            <div style="font-size:13px; font-weight:700; color:#60a5fa;">Automation Token</div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Bypasses 2FA — safe for GitHub Actions / automated CI.</div>
+          </div>
+          <div class="card anim-fadeup anim-d4" style="border-left:3px solid #38bdf8; padding:12px 16px;">
+            <div style="font-size:13px; font-weight:700; color:#38bdf8;">Granular Token</div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Per-package / per-org fine-grained access control.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 6: CI/CD -->
+    <div class="slide theme-green" id="s6">
+      <div class="badge" style="background:#10b981;">06 — CI/CD Automation</div>
+      <div class="slide-title text-white" style="font-size:30px;">GitHub Actions: Auto-Publish on Tag</div>
+      <div class="row" style="margin-top:16px;">
+        <div style="flex:1.4;">
+          <div class="code-block" style="font-size:12px; line-height:1.6;">
+            <div style="color:#38bdf8; font-size:11px; margin-bottom:8px; border-bottom:1px solid #1e3a5f; padding-bottom:6px;">.github/workflows/publish.yml</div>
+            <div class="line visible"><span class="ck">name</span><span class="cn">: Publish Package</span></div>
+            <div class="line visible"><span class="ck">on</span><span class="cn">:</span></div>
+            <div class="line visible">&nbsp;&nbsp;<span class="ck">push</span><span class="cn">:</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">tags</span><span class="cn">: [</span><span class="cs">'v*'</span><span class="cn">]</span></div>
+            <div class="line visible"><span class="ck">jobs</span><span class="cn">:</span></div>
+            <div class="line visible">&nbsp;&nbsp;<span class="ck">publish</span><span class="cn">:</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">runs-on</span><span class="cn">: ubuntu-latest</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">steps</span><span class="cn">:</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">- uses: actions/checkout@v4</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">- uses: actions/setup-node@v4</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">with</span><span class="cn">:</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">node-version</span><span class="cn">: </span><span class="cs">'20'</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">registry-url</span><span class="cn">: </span><span class="cs">'https://registry.npmjs.org'</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">- run: npm ci</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">- run: npm run build</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cs">- run: npm publish --access public</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">env</span><span class="cn">:</span></div>
+            <div class="line visible">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">NODE_AUTH_TOKEN</span><span class="cn">: ${{ secrets.NPM_TOKEN }}</span></div>
+          </div>
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:12px;">
+          <div style="font-size:13px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">Workflow Trigger</div>
+          <div class="card anim-fadeup anim-d1" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3); padding:14px;">
+            <p style="font-size:13px; color:#86efac;">Triggered on <strong>git tag push</strong> matching <code style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px;">v*</code></p>
+            <div style="font-family:monospace; font-size:12px; color:#4ade80; margin-top:8px; background:rgba(0,0,0,0.3); padding:8px; border-radius:6px;">
+              git tag v1.0.0<br>git push origin v1.0.0
+            </div>
+          </div>
+          <div style="font-size:13px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">Setup Steps</div>
+          <div class="card anim-fadeup anim-d2" style="padding:12px; background:rgba(255,255,255,0.05);">
+            <p style="font-size:12px; color:#e2e8f0;">1. Generate token at npmjs.com (Automation type)</p>
+            <p style="font-size:12px; color:#e2e8f0; margin-top:6px;">2. GitHub repo → Settings → Secrets → Actions</p>
+            <p style="font-size:12px; color:#e2e8f0; margin-top:6px;">3. Add <code style="color:#4ade80;">NPM_TOKEN</code> secret</p>
+          </div>
+          <div class="warn-box anim-fadeup anim-d3">
+            <span>💡</span>
+            <span style="font-size:12px;">Use <strong>Automation token</strong> in CI to bypass 2FA safely.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 7: Best Practices -->
+    <div class="slide theme-light" id="s7">
+      <div class="badge" style="background:#7c3aed;">07 — Best Practices</div>
+      <div class="slide-title text-dark" style="font-size:30px;">Tips, Checklist & Security</div>
+      <div class="bp-grid" style="margin-top:16px;" id="bp-grid">
+        <div class="bp-card" id="bp0">
+          <div class="bp-icon">🔖</div>
+          <div><div class="bp-title">Always Bump Version</div><div class="bp-desc">Run npm version patch|minor|major before every publish. Same version = error!</div></div>
+        </div>
+        <div class="bp-card" id="bp1">
+          <div class="bp-icon">👁️</div>
+          <div><div class="bp-title">Preview with npm pack</div><div class="bp-desc">Run npm pack --dry-run to see exactly what files will be published before pushing.</div></div>
+        </div>
+        <div class="bp-card" id="bp2">
+          <div class="bp-icon">📄</div>
+          <div><div class="bp-title">Write a README.md</div><div class="bp-desc">Shown on npmjs.com. Include install steps, usage, API docs, examples.</div></div>
+        </div>
+        <div class="bp-card" id="bp3">
+          <div class="bp-icon">🚫</div>
+          <div><div class="bp-title">Use .npmignore / files</div><div class="bp-desc">Exclude test/, src/, .env, docs/ from published tarball to keep it lean.</div></div>
+        </div>
+        <div class="bp-card" id="bp4">
+          <div class="bp-icon">🔐</div>
+          <div><div class="bp-title">Enable 2FA</div><div class="bp-desc">Protect your account at npmjs.com. Use Automation tokens in CI to bypass it safely.</div></div>
+        </div>
+        <div class="bp-card" id="bp5">
+          <div class="bp-icon">🔍</div>
+          <div><div class="bp-title">npm audit Regularly</div><div class="bp-desc">Scan your dependencies for known vulnerabilities before publishing a new version.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 8: Summary -->
+    <div class="slide theme-dark" id="s8">
+      <div style="display:flex; flex:1; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+        <div class="npm-logo" style="font-size:52px; width:160px; height:90px; margin-bottom:24px;" class="anim-fadeup anim-d1">npm</div>
+        <div class="slide-title text-white anim-fadeup anim-d2" style="font-size:30px; margin-bottom:8px;">Key Takeaways</div>
+        <div style="width:100%; max-width:700px; margin-top:20px; display:flex; flex-direction:column; gap:10px;">
+          <div class="card anim-fadeup anim-d1" style="background:rgba(37,99,235,0.15); border-color:rgba(37,99,235,0.3); text-align:left; flex-direction:row; display:flex; gap:12px; align-items:center;">
+            <span style="font-size:20px;">▶</span>
+            <span style="font-size:13px; color:#e2e8f0;"><strong style="color:#38bdf8;">npm publish</strong> → public registry &nbsp;|&nbsp; .npmrc scopes → private registries</span>
+          </div>
+          <div class="card anim-fadeup anim-d2" style="background:rgba(37,99,235,0.15); border-color:rgba(37,99,235,0.3); text-align:left; flex-direction:row; display:flex; gap:12px; align-items:center;">
+            <span style="font-size:20px;">▶</span>
+            <span style="font-size:13px; color:#e2e8f0;">Always use <strong style="color:#38bdf8;">tokens in CI/CD</strong> via secrets — never hardcode credentials</span>
+          </div>
+          <div class="card anim-fadeup anim-d3" style="background:rgba(37,99,235,0.15); border-color:rgba(37,99,235,0.3); text-align:left; flex-direction:row; display:flex; gap:12px; align-items:center;">
+            <span style="font-size:20px;">▶</span>
+            <span style="font-size:13px; color:#e2e8f0;">Bump version with <strong style="color:#38bdf8;">npm version</strong> before every single publish</span>
+          </div>
+          <div class="card anim-fadeup anim-d4" style="background:rgba(37,99,235,0.15); border-color:rgba(37,99,235,0.3); text-align:left; flex-direction:row; display:flex; gap:12px; align-items:center;">
+            <span style="font-size:20px;">▶</span>
+            <span style="font-size:13px; color:#e2e8f0;"><strong style="color:#38bdf8;">GitHub Actions</strong> automates publishing when you push a git tag</span>
+          </div>
+          <div class="card anim-fadeup anim-d5" style="background:rgba(37,99,235,0.15); border-color:rgba(37,99,235,0.3); text-align:left; flex-direction:row; display:flex; gap:12px; align-items:center;">
+            <span style="font-size:20px;">▶</span>
+            <span style="font-size:13px; color:#e2e8f0;"><strong style="color:#38bdf8;">npm pack --dry-run</strong> always previews what will be published</span>
+          </div>
+        </div>
+        <div style="margin-top:28px; font-size:24px; color:#f59e0b; font-weight:800;" class="anim-fadeup anim-d5">
+          🙋 Questions & Discussion
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end slide-area -->
+
+  <!-- Controls -->
+  <div id="controls">
+    <button class="ctrl-btn" id="prev-btn" onclick="changeSlide(-1)" disabled>‹</button>
+    <button id="play-btn" onclick="toggleAuto()">▶</button>
+    <button class="ctrl-btn" id="next-btn" onclick="changeSlide(1)">›</button>
+
+    <div id="slide-dots"></div>
+
+    <div id="progress-track" onclick="scrub(event)">
+      <div id="progress-fill" style="width:0%"></div>
+    </div>
+
+    <span id="slide-label">Welcome</span>
+    <span id="slide-counter">1 / 9</span>
+  </div>
+</div>
+
+<script>
+const SLIDES = [
+  { id: 's0', label: 'Welcome', onEnter: null },
+  { id: 's1', label: 'What is NPM?', onEnter: null },
+  { id: 's2', label: 'Project Setup', onEnter: animCodeSetup },
+  { id: 's3', label: 'Public Publishing', onEnter: animPubSteps },
+  { id: 's4', label: 'Private Registry', onEnter: null },
+  { id: 's5', label: 'Authentication', onEnter: null },
+  { id: 's6', label: 'CI/CD Automation', onEnter: null },
+  { id: 's7', label: 'Best Practices', onEnter: animBestPractices },
+  { id: 's8', label: 'Summary & Q&A', onEnter: null },
+];
+
+let current = 0;
+let autoTimer = null;
+const AUTO_INTERVAL = 7000;
+
+// Build dots
+const dotsEl = document.getElementById('slide-dots');
+SLIDES.forEach((_, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot' + (i === 0 ? ' active' : '');
+  d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+});
+
+function updateUI() {
+  const pct = (current / (SLIDES.length - 1)) * 100;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + SLIDES.length;
+  document.getElementById('slide-label').textContent = SLIDES[current].label;
+  document.getElementById('prev-btn').disabled = current === 0;
+  document.getElementById('next-btn').disabled = current === SLIDES.length - 1;
+  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === current));
+}
+
+function goTo(idx, fromAuto) {
+  if (idx < 0 || idx >= SLIDES.length) return;
+  const prev = document.getElementById(SLIDES[current].id);
+  prev.classList.remove('active');
+  prev.classList.add('exit');
+  setTimeout(() => prev.classList.remove('exit'), 500);
+
+  current = idx;
+  const next = document.getElementById(SLIDES[current].id);
+  next.classList.add('active');
+  updateUI();
+
+  if (SLIDES[current].onEnter) {
+    setTimeout(SLIDES[current].onEnter, 300);
+  }
+}
+
+function changeSlide(dir) {
+  stopAuto();
+  goTo(current + dir);
+}
+
+function toggleAuto() {
+  if (autoTimer) { stopAuto(); }
+  else {
+    document.getElementById('play-btn').textContent = '⏸';
+    document.getElementById('play-btn').style.background = '#7c3aed';
+    autoTimer = setInterval(() => {
+      if (current < SLIDES.length - 1) { goTo(current + 1, true); }
+      else stopAuto();
+    }, AUTO_INTERVAL);
+  }
+}
+
+function stopAuto() {
+  clearInterval(autoTimer);
+  autoTimer = null;
+  document.getElementById('play-btn').textContent = '▶';
+  document.getElementById('play-btn').style.background = '#2563eb';
+}
+
+function scrub(e) {
+  stopAuto();
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  goTo(Math.round(pct * (SLIDES.length - 1)));
+}
+
+// Keyboard nav
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); changeSlide(1); }
+  if (e.key === 'ArrowLeft') changeSlide(-1);
+  if (e.key === 'p' || e.key === 'P') toggleAuto();
+});
+
+updateUI();
+
+// ── Slide-specific animations ──
+
+function animCodeSetup() {
+  const ids = ['cl0','cl1','cl2','cl3','cl4','cl5','cl6','cl7','cl8','cl9'];
+  ids.forEach((id, i) => {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('visible');
+    }, i * 120);
+  });
+}
+
+function animPubSteps() {
+  ['ps0','ps1','ps2','ps3','ps4'].forEach((id, i) => {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('visible');
+    }, i * 200 + 100);
+  });
+}
+
+function animBestPractices() {
+  ['bp0','bp1','bp2','bp3','bp4','bp5'].forEach((id, i) => {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('visible');
+    }, i * 150 + 100);
+  });
+}
+</script>
+</body>
+</html>
